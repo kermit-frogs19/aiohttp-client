@@ -4,7 +4,7 @@ import aiolimiter
 import json
 from contextlib import nullcontext
 
-from .async_client_response import AsyncClientResponse
+from async_client_response import AsyncClientResponse
 
 
 class AsyncClient:

@@ -1,5 +1,4 @@
 import asyncio
-from client import *
 
 
 # Example usage
