@@ -1,4 +1,5 @@
 __version__ = "1.0.0"
+__name__ = "aiohttp-client"
 
 
 try:
