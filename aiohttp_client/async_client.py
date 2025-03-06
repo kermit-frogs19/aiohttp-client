@@ -80,7 +80,7 @@ class AsyncClient:
         """
 
         self.session = aiohttp.ClientSession(**self.config)
-        return self  # Allows `async with BaseClient(...) as client:`
+        return self  # Allows `async with AsyncClient(...) as client:`
 
     async def __aexit__(self, exc_type, exc_value, traceback):
         """
@@ -95,7 +95,7 @@ class AsyncClient:
     async def _retry(
             self,
             e: BaseException,
-            retry_count: int,
+            attempt_count: int,
             method: str,
             kwargs: dict
     ) -> str | None:
@@ -104,21 +104,21 @@ class AsyncClient:
         value if exceeded - returns fail message, else - returns None, signalizing that retry is possible.
 
         :param e: (BaseException) Exception instance of the BaseException child class
-        :param retry_count: (int) Amount of already completed retries
+        :param attempt_count: (int) Amount of already completed retries
         :param method: (str) Either GET/POST/PUT/PATCH/DELETE
         :param kwargs: (dict) Keyword arguments for the requests
-        :return:
+        :return: None
         """
 
         error_name = e.__class__.__name__
-        main_message = f"{error_name} {str(e)} in {method}. kwargs: {kwargs}"
+        main_message = f"{error_name} {str(e)} in {method} method. kwargs: {kwargs}"
 
         if not isinstance(e, tuple(self.retryable_errors)):
             return f"Non-retryable error: {main_message}"
-        elif retry_count == self.max_attempts:
-            return f"Failed after retrying {retry_count}/{self.max_attempts} times. {main_message}"
-        elif retry_count < self.max_attempts:
-            await asyncio.sleep(self.retry_timeout if self.retry_timeout is not None else 2 ** retry_count)
+        elif attempt_count == self.max_attempts:
+            return f"Failed after attempting {attempt_count}/{self.max_attempts} times. {main_message}"
+        elif attempt_count < self.max_attempts:
+            await asyncio.sleep(self.retry_timeout if self.retry_timeout is not None else 2 ** attempt_count)
             return None
         return main_message
 
@@ -136,7 +136,7 @@ class AsyncClient:
         :param url: (str) URL to make HTTP request to
         :param use_request_limit: (bool) Indicate whether the request limiting per time second should be applied
                for the request
-        :param kwargs: (dict) Keyword arguments for the requests
+        :param kwargs: (dict) Additional keyword arguments for the requests. Use standard aiohttp parameters.
         :return: (AsyncClientResponse)
         """
 
@@ -146,7 +146,7 @@ class AsyncClient:
         url = url if url.startswith(self.base_url) else f"{self.base_url}{url}"
         use_request_limit = self.use_request_limit if use_request_limit is None else use_request_limit
 
-        for retry_count in range(self.max_attempts):
+        for attempt in range(1, self.max_attempts + 1):
             try:
                 async with (self.limiter if use_request_limit else nullcontext()):
                     async with self.session.request(method, url, **kwargs) as response:
@@ -154,19 +154,20 @@ class AsyncClient:
 
                         data = await response.json()
                         text = await response.text()
+                        print(response)
                         return AsyncClientResponse(code=response.status, text=text, data=data, reason=response.reason)
 
             except aiohttp.ClientResponseError as e:
                 if e.status == 429 and self.allow_too_many_reqs_retry:
-                    if fail_message := await self._retry(e, retry_count, method, kwargs):
+                    if fail_message := await self._retry(e, attempt, method, kwargs):
                         return AsyncClientResponse(code=e.status, _is_error=True, text=f"{fail_message}. text: {e.message}", reason="Too Many Requests")
                 else:
-                    if fail_message := await self._retry(e, retry_count, method, kwargs):
+                    if fail_message := await self._retry(e, attempt, method, kwargs):
                         return AsyncClientResponse(code=e.status, _is_error=True, text=f"{fail_message}. text: {e.message}")
 
             except (json.JSONDecodeError, aiohttp.ContentTypeError, asyncio.TimeoutError,
                     aiohttp.ConnectionTimeoutError, aiohttp.ClientError) as e:
-                if fail_message := await self._retry(e, retry_count, method, kwargs):
+                if fail_message := await self._retry(e, attempt, method, kwargs):
                     return AsyncClientResponse(_is_error=True, text=fail_message)
 
             except BaseException as e:
@@ -211,7 +212,7 @@ class AsyncClient:
         :param url: (str) URL to make HTTP request to
         :param use_request_limit: (bool) Indicate whether the request limiting per time second should be applied
                for the request
-        :param kwargs: (dict) Keyword arguments for the requests
+        :param kwargs: (dict) Additional keyword arguments for the requests. Use standard aiohttp parameters.
         :return: (AsyncClientResponse)
         """
 
@@ -234,7 +235,7 @@ class AsyncClient:
         :param url: (str) URL to make HTTP request to
         :param use_request_limit: (bool) Indicate whether the request limiting per time second should be applied
                for the request
-        :param kwargs: (dict) Keyword arguments for the requests
+        :param kwargs: (dict) Additional keyword arguments for the requests. Use standard aiohttp parameters.
         :return: (AsyncClientResponse)
         """
 
@@ -257,7 +258,7 @@ class AsyncClient:
         :param url: (str) URL to make HTTP request to
         :param use_request_limit: (bool) Indicate whether the request limiting per time second should be applied
                for the request
-        :param kwargs: (dict) Keyword arguments for the requests
+        :param kwargs: (dict) Additional keyword arguments for the requests. Use standard aiohttp parameters.
         :return: (AsyncClientResponse)
         """
 
@@ -280,7 +281,7 @@ class AsyncClient:
         :param url: (str) URL to make HTTP request to
         :param use_request_limit: (bool) Indicate whether the request limiting per time second should be applied
                for the request
-        :param kwargs: (dict) Keyword arguments for the requests
+        :param kwargs: (dict) Additional keyword arguments for the requests. Use standard aiohttp parameters.
         :return: (AsyncClientResponse)
         """
 
@@ -303,7 +304,7 @@ class AsyncClient:
         :param url: (str) URL to make HTTP request to
         :param use_request_limit: (bool) Indicate whether the request limiting per time second should be applied
                for the request
-        :param kwargs: (dict) Keyword arguments for the requests
+        :param kwargs: (dict) Additional keyword arguments for the requests. Use standard aiohttp parameters.
         :return: (AsyncClientResponse)
         """
 
@@ -324,10 +325,11 @@ class AsyncClient:
         """
         Makes an async request and returns request response.
 
+        :param method: (str) HTTP Method that should be to make request, either GET/POST/PUT/PATCH/DELETE
         :param url: (str) URL to make HTTP request to
         :param use_request_limit: (bool) Indicate whether the request limiting per time second should be applied
                for the request
-        :param kwargs: (dict) Keyword arguments for the requests
+        :param kwargs: (dict) Additional keyword arguments for the requests. Use standard aiohttp parameters.
         :return: (AsyncClientResponse)
         """
 
