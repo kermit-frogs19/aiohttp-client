@@ -12,7 +12,7 @@ try:
 except ImportError:
     raise ImportError("aiolimiter package must be installed to use the aiohttp-client. use 'pip install aiolimiter'")
 
-from async_client import AsyncClient
-from async_client_response import AsyncClientResponse
+from aiohttp_client.async_client import AsyncClient
+from aiohttp_client.async_client_response import AsyncClientResponse
 
 
