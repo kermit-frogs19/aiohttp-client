@@ -10,28 +10,56 @@ from async_client_response import AsyncClientResponse
 class AsyncClient:
     def __init__(
             self,
-            base_url: str,
+            base_url: str = "",
             rate_limit: int = None,
             headers: dict = None,
-            timeout: float = 10,
-            max_retries: int = 3,
-            retry_timeout: float = 10,
+            timeout: float = 10.0,
+            max_attempts: int = 3,
+            retry_timeout: float = 10.0,
             allow_timeout_error_retry: bool = True,
             allow_status_error_retry: bool = False,
             allow_http_error_retry: bool = False,
             allow_json_decode_error_retry: bool = False,
             allow_too_many_reqs_retry: bool = False
-    ):
+    ) -> None:
+        """
+        HTTP client, makes requests, returns responses. Includes functionalities of request rate limiting and
+        request retrying, when an error (which is set as retryable) occurs. Request methods return an instance of
+        AsyncClientResponse class.
+
+        :param base_url: (str) Base part of URL to make requests to. If methods get full URL, base part of which is
+               already set in this variable, then the base URL set here is ignored.
+        :param rate_limit: (int) Request rate limiting. Amount of HTTP requests per second the client will do. If set to
+               None, then rate limiting is not applied, thus rate limiting is not applied by default.
+        :param headers: (dict, Optional) Headers that will be used when making request. If not provided, then
+               headers must be passed to methods when making requests.
+        :param timeout: (float, int) Request timeout, how long do the client waits for connection to be established with
+               the server/get a response from server.
+        :param max_attempts: (int) Maximum amount of attempts the client will take to get a successful response from a
+               server, if the initial request was unsuccessful and the request error is set as retryable.
+        :param retry_timeout: (float, int) Amount of time, in seconds, the client will wait before retrying request. If
+               set to None, then client uses exponentially increasing delays between retries. If set to 0, then retry
+               timeout is not applied.
+        :param allow_timeout_error_retry: (bool) Indicates whether the timeout errors should be retried or not.
+        :param allow_status_error_retry: (bool) Indicates whether the status errors (returned by the server) should
+               be retried or not.
+        :param allow_http_error_retry: (bool) Indicates whether the general HTTP errors should be retried or not.
+        :param allow_json_decode_error_retry: (bool) Indicates whether the requests that didn't get a valid JSON data
+               in response should be retried or not.
+        :param allow_too_many_reqs_retry: (bool) Indicates whether the requests that got '429 - Too Many Requests'
+               error should be retried.
+        """
+
         self.base_url = base_url
         self.headers = headers
         self.rate_limit = rate_limit
-        self.max_retries = max_retries
+        self.max_attempts = max_attempts
         self.allow_too_many_reqs_retry = allow_too_many_reqs_retry
         self.retry_timeout = retry_timeout
 
         self.use_request_limit: bool = self.rate_limit is not None
         self.timeout = aiohttp.ClientTimeout(total=timeout)
-        self.config: dict = {"timeout": self.timeout, "headers": self.headers}
+        self.config = {"timeout": self.timeout, "headers": self.headers}
         self.session = aiohttp.ClientSession(**self.config)
         self.limiter = aiolimiter.AsyncLimiter(self.rate_limit, 1) if self.use_request_limit else None
 
@@ -42,47 +70,27 @@ class AsyncClient:
             aiohttp.ConnectionTimeoutError if allow_timeout_error_retry else None,
             aiohttp.ClientResponseError if allow_status_error_retry else None,
             aiohttp.ClientError if allow_http_error_retry else None
-
         ]))
 
-    @property
-    def is_running(self) -> bool:
-        """
-        Returns boolean value of whether the session is still running or not.
-
-        :return: (bool)
-        """
-        return not self.session.closed
-
     async def __aenter__(self):
-        """Ensures the session is created when entering the context."""
+        """
+        Ensures the session is created when entering the context. For use with async context manager, i.e.
+
+        `async with AsyncClient() as client`
+        """
 
         self.session = aiohttp.ClientSession(**self.config)
         return self  # Allows `async with BaseClient(...) as client:`
 
     async def __aexit__(self, exc_type, exc_value, traceback):
-        """Closes the session when the application exits."""
+        """
+        Closes the session when the application exits the context.For use with async context manager, i.e.
+
+        `async with AsyncClient() as client`
+        """
 
         if self.session and not self.session.closed:
             await self.stop()
-
-    async def start(self) -> None:
-        """Starts the client, if closed"""
-
-        if self.is_running:
-            return
-
-        self.session = None
-        self.session = aiohttp.ClientSession(**self.config)
-
-    async def stop(self) -> None:
-        """Stops the client, if running"""
-
-        if not self.is_running:
-            return
-
-        await self.session.close()
-        self.session = None
 
     async def _retry(
             self,
@@ -92,7 +100,7 @@ class AsyncClient:
             kwargs: dict
     ) -> str | None:
         """
-        Checks exception type, async-sleeps for set retry timeout if exception type is set retryable. If max retries
+        Checks exception type, async-sleeps for set retry timeout if exception type is set as retryable. If max retries
         value if exceeded - returns fail message, else - returns None, signalizing that retry is possible.
 
         :param e: (BaseException) Exception instance of the BaseException child class
@@ -107,9 +115,9 @@ class AsyncClient:
 
         if not isinstance(e, tuple(self.retryable_errors)):
             return f"Non-retryable error: {main_message}"
-        elif retry_count == self.max_retries:
-            return f"Failed after retrying {retry_count}/{self.max_retries} times. {main_message}"
-        elif retry_count < self.max_retries:
+        elif retry_count == self.max_attempts:
+            return f"Failed after retrying {retry_count}/{self.max_attempts} times. {main_message}"
+        elif retry_count < self.max_attempts:
             await asyncio.sleep(self.retry_timeout if self.retry_timeout is not None else 2 ** retry_count)
             return None
         return main_message
@@ -138,7 +146,7 @@ class AsyncClient:
         url = url if url.startswith(self.base_url) else f"{self.base_url}{url}"
         use_request_limit = self.use_request_limit if use_request_limit is None else use_request_limit
 
-        for retry_count in range(self.max_retries):
+        for retry_count in range(self.max_attempts):
             try:
                 async with (self.limiter if use_request_limit else nullcontext()):
                     async with self.session.request(method, url, **kwargs) as response:
@@ -163,6 +171,33 @@ class AsyncClient:
 
             except BaseException as e:
                 return AsyncClientResponse(_is_error=True, text=f"BaseException in {method} request - {e.__class__.__name__}: {str(e)}. kwargs: {kwargs}")
+
+    @property
+    def is_running(self) -> bool:
+        """
+        Returns boolean value of whether the session is still running or not.
+
+        :return: (bool)
+        """
+        return not self.session.closed
+
+    async def start(self) -> None:
+        """Starts the client, if closed"""
+
+        if self.is_running:
+            return
+
+        self.session = None
+        self.session = aiohttp.ClientSession(**self.config)
+
+    async def stop(self) -> None:
+        """Stops the client, if running"""
+
+        if not self.is_running:
+            return
+
+        await self.session.close()
+        self.session = None
 
     async def get(
             self,

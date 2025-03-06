@@ -1,4 +1,5 @@
 import asyncio
+from async_client import AsyncClient
 
 
 # Example usage
