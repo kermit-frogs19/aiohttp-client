@@ -150,19 +150,19 @@ class AsyncClient:
             try:
                 async with (self.limiter if use_request_limit else nullcontext()):
                     async with self.session.request(method, url, **kwargs) as response:
+                        text = await response.text()
                         response.raise_for_status()
 
                         data = await response.json()
-                        text = await response.text()
                         return AsyncClientResponse(code=response.status, text=text, data=data, reason=response.reason)
 
             except aiohttp.ClientResponseError as e:
                 if e.status == 429 and self.allow_too_many_reqs_retry:
                     if fail_message := await self._retry(e, attempt, method, kwargs):
-                        return AsyncClientResponse(code=e.status, _is_error=True, text=f"{fail_message}. text: {e.message}", reason="Too Many Requests")
+                        return AsyncClientResponse(code=e.status, _is_error=True, text=f"{fail_message}. text: {text}", reason="Too Many Requests")
                 else:
                     if fail_message := await self._retry(e, attempt, method, kwargs):
-                        return AsyncClientResponse(code=e.status, _is_error=True, text=f"{fail_message}. text: {e.message}")
+                        return AsyncClientResponse(code=e.status, _is_error=True, text=f"{fail_message}. text: {text}")
 
             except (json.JSONDecodeError, aiohttp.ContentTypeError, asyncio.TimeoutError,
                     aiohttp.ConnectionTimeoutError, aiohttp.ClientError) as e:
