@@ -69,7 +69,8 @@ class AsyncClient:
             asyncio.TimeoutError if allow_timeout_error_retry else None,
             aiohttp.ConnectionTimeoutError if allow_timeout_error_retry else None,
             aiohttp.ClientResponseError if allow_status_error_retry else None,
-            aiohttp.ClientError if allow_http_error_retry else None
+            aiohttp.ClientError if allow_http_error_retry else None,
+            aiohttp.ClientConnectionError if allow_timeout_error_retry else None
         ]))
 
     async def __aenter__(self):
@@ -165,7 +166,7 @@ class AsyncClient:
                         return AsyncClientResponse(code=e.status, _is_error=True, text=f"{fail_message}. text: {text}")
 
             except (json.JSONDecodeError, aiohttp.ContentTypeError, asyncio.TimeoutError,
-                    aiohttp.ConnectionTimeoutError, aiohttp.ClientError) as e:
+                    aiohttp.ConnectionTimeoutError, aiohttp.ClientError, aiohttp.ClientConnectionError) as e:
                 if fail_message := await self._retry(e, attempt, method, kwargs):
                     return AsyncClientResponse(_is_error=True, text=fail_message)
 
