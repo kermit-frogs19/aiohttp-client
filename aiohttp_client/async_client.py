@@ -60,7 +60,7 @@ class AsyncClient:
         self.use_request_limit: bool = self.rate_limit is not None
         self.timeout = aiohttp.ClientTimeout(total=timeout)
         self.config = {"timeout": self.timeout, "headers": self.headers}
-        self.session = aiohttp.ClientSession(**self.config)
+        self.session = None
         self.limiter = aiolimiter.AsyncLimiter(self.rate_limit, 1) if self.use_request_limit else None
 
         self.retryable_errors = list(filter(None, [
@@ -154,7 +154,6 @@ class AsyncClient:
 
                         data = await response.json()
                         text = await response.text()
-                        print(response)
                         return AsyncClientResponse(code=response.status, text=text, data=data, reason=response.reason)
 
             except aiohttp.ClientResponseError as e:
@@ -180,6 +179,8 @@ class AsyncClient:
 
         :return: (bool)
         """
+        if self.session is None:
+            return False
         return not self.session.closed
 
     async def start(self) -> None:

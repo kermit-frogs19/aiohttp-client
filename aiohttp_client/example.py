@@ -41,11 +41,11 @@ class PlaceholderClient(AsyncClient):
         return response.data
 
 
+# initializing the child class
+placeholder = PlaceholderClient()
+
+
 async def func():
-
-    # initializing the child class
-    placeholder = PlaceholderClient()
-
     # using the method
     result = await placeholder.get_todos()
     print(result)
