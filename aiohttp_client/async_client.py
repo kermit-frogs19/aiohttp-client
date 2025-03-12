@@ -74,8 +74,6 @@ class AsyncClient:
             aiohttp.ClientConnectionError if allow_timeout_error_retry else None
         ]))
 
-        atexit.register(self._force_stop)  # Ensure cleanup on exit
-
     async def __aenter__(self):
         """
         Ensures the session is created when entering the context. For use with async context manager, i.e.
@@ -95,12 +93,6 @@ class AsyncClient:
 
         if self.session and not self.session.closed:
             await self.stop()
-
-    def _force_stop(self):
-        """ Sync close for atexit handling """
-        if self.is_running:
-            loop = asyncio.get_event_loop()
-            loop.run_until_complete(self.stop())
 
     async def _retry(
             self,
