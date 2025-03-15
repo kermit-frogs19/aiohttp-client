@@ -64,7 +64,7 @@ class AsyncClient:
         self.session = None
         self.limiter = aiolimiter.AsyncLimiter(self.rate_limit, 1) if self.use_request_limit else None
 
-        self.retryable_errors = list(filter(None, [
+        self.retryable_errors = set(filter(None, [
             json.JSONDecodeError if allow_json_decode_error_retry else None,
             aiohttp.ContentTypeError if allow_json_decode_error_retry else None,
             asyncio.TimeoutError if allow_timeout_error_retry else None,
@@ -115,7 +115,7 @@ class AsyncClient:
         error_name = e.__class__.__name__
         main_message = f"{error_name} {str(e)} in {method} method. kwargs: {kwargs}"
 
-        if not isinstance(e.__class__, tuple(self.retryable_errors)):
+        if e.__class__ not in self.retryable_errors:
             return f"Non-retryable error: {main_message}"
         elif attempt_count == self.max_attempts:
             return f"Failed after attempting {attempt_count}/{self.max_attempts} times. {main_message}"
