@@ -160,15 +160,15 @@ class AsyncClient:
             except aiohttp.ClientResponseError as e:
                 if e.status == 429 and self.allow_too_many_reqs_retry:
                     if fail_message := await self._retry(e, attempt, method, kwargs):
-                        return AsyncClientResponse(code=e.status, _is_error=True, text=f"{fail_message}. text: {text}", reason="Too Many Requests")
+                        return AsyncClientResponse(code=e.status, _is_error=True, error=fail_message, reason="Too Many Requests", text=text)
                 else:
                     if fail_message := await self._retry(e, attempt, method, kwargs):
-                        return AsyncClientResponse(code=e.status, _is_error=True, text=f"{fail_message}. text: {text}")
+                        return AsyncClientResponse(code=e.status, _is_error=True, error=fail_message, text=text)
 
             except (json.JSONDecodeError, aiohttp.ContentTypeError, asyncio.TimeoutError,
                     aiohttp.ConnectionTimeoutError, aiohttp.ClientError, aiohttp.ClientConnectionError) as e:
                 if fail_message := await self._retry(e, attempt, method, kwargs):
-                    return AsyncClientResponse(_is_error=True, text=fail_message)
+                    return AsyncClientResponse(_is_error=True, error=fail_message, text=text)
 
             except BaseException as e:
                 return AsyncClientResponse(_is_error=True, text=f"BaseException in {method} request - {e.__class__.__name__}: {str(e)}. kwargs: {kwargs}")

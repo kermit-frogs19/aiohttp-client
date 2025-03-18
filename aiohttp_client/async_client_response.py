@@ -16,10 +16,10 @@ class AsyncClientResponse:
         # Iterate of data dictionary fields and see if it contains a non-empty error field
         if any((matched_key := key) in self.data for key in {"error", "errors", "error_message"}):
             if self.data[matched_key]:
-                self.error = str(self.data.get(matched_key)) if self.data.get(matched_key) else f"{self.reason} - {self.text}"
+                self.error = str(self.data.get(matched_key)) if self.data.get(matched_key) else f"{self.code} - {self.reason}. text: {self.text}"
                 self._is_error = True
         elif self._is_error:
-            self.error = self.text
+            self.error = f"{self.code} {self.error if self.error is not None else ""}. text: {self.text}"
             self._is_error = True
 
     @property
