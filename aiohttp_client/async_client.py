@@ -3,7 +3,6 @@ import asyncio
 import aiolimiter
 import json
 from contextlib import nullcontext
-import atexit
 
 from aiohttp_client.async_client_response import AsyncClientResponse
 
@@ -12,7 +11,7 @@ class AsyncClient:
     def __init__(
             self,
             base_url: str = "",
-            rate_limit: int = None,
+            rate_limit: int | float = None,
             headers: dict = None,
             timeout: float = 10.0,
             max_attempts: int = 3,
@@ -30,8 +29,8 @@ class AsyncClient:
 
         :param base_url: (str) Base part of URL to make requests to. If methods get full URL, base part of which is
                already set in this variable, then the base URL set here is ignored.
-        :param rate_limit: (int) Request rate limiting. Amount of HTTP requests per second the client will do. If set to
-               None, then rate limiting is not applied, thus rate limiting is not applied by default.
+        :param rate_limit: (int, float) Request rate limiting. Amount of HTTP requests per second the client will do.
+               If set to None, then rate limiting is not applied, thus rate limiting is not applied by default.
         :param headers: (dict, Optional) Headers that will be used when making request. If not provided, then
                headers must be passed to methods when making requests.
         :param timeout: (float, int) Request timeout, how long do the client waits for connection to be established with
