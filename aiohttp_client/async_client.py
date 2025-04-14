@@ -13,7 +13,7 @@ class AsyncClient:
             base_url: str = "",
             rate_limit: int | float = None,
             headers: dict = None,
-            timeout: float = 10.0,
+            timeout: float | None = 10.0,
             max_attempts: int = 3,
             retry_timeout: float = 10.0,
             allow_timeout_error_retry: bool = True,
@@ -60,7 +60,7 @@ class AsyncClient:
         self.use_request_limit: bool = self.rate_limit is not None
         self.timeout = aiohttp.ClientTimeout(total=timeout)
         self.config = {"timeout": self.timeout, "headers": self.headers}
-        self.session = None
+        self.session: aiohttp.ClientSession | None = None
         self.limiter = aiolimiter.AsyncLimiter(self.rate_limit, 1) if self.use_request_limit else None
 
         self.retryable_errors = set(filter(None, [
