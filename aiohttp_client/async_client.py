@@ -148,6 +148,7 @@ class AsyncClient:
         use_request_limit = self.use_request_limit if use_request_limit is None else use_request_limit
 
         for attempt in range(1, self.max_attempts + 1):
+            text = ""
             try:
                 async with (self.limiter if use_request_limit else nullcontext()):
                     async with self.session.request(method, url, **kwargs) as response:
